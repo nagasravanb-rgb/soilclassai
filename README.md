@@ -33,6 +33,27 @@ Set `SOIL_CLASSIFIER_ENDPOINT` to your own deployed HTTPS inference endpoint. It
 
 The adapter is deliberately optional: no model endpoint or model weights are bundled in this repository, and the app must not claim a validated model is active unless this endpoint is configured and returns a prediction. Any externally hosted classifier must be evaluated on a held-out, correctly labelled Indian dataset—preferably including Andhra Pradesh samples—before its output is treated as reliable.
 
+### Evaluate a classifier on held-out images
+Create a folder such as `data/soil-validation/` with one subfolder per ground-truth class, using images that were not used to train or tune the model:
+
+```text
+data/soil-validation/
+  Black Soil/
+    sample-001.jpg
+  Red Soil/
+    sample-002.jpg
+  Sandy loam/
+    sample-003.jpg
+```
+
+Set `SOIL_CLASSIFIER_ENDPOINT` (and `SOIL_CLASSIFIER_TOKEN`, if required), then run:
+
+```bash
+npm run evaluate:classifier
+```
+
+Or pass a different dataset folder: `node scripts/evaluate-classifier.mjs path/to/held-out-images`. The script reports accuracy, per-class precision/recall/F1, and a confusion matrix. Use a balanced, independently labelled test set and report its size and collection conditions; the script does not itself certify a model or prove generalization.
+
 ## Deploy to Vercel
 1. Import this repository into Vercel with the repository root as the project root.
 2. Add `GEMINI_API_KEY` in Project Settings → Environment Variables for Preview and Production.
