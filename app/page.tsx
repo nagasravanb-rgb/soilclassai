@@ -35,7 +35,7 @@ export default function Home() {
     setAnalysis(null);
     if (!next) return;
     if (!next.type.startsWith("image/")) { setError("Please select a JPG, PNG, or WebP image."); return; }
-    if (next.size > 8 * 1024 * 1024) { setError("Image is too large. Please use an image under 8 MB."); return; }
+    if (next.size > 8 * 1024 * 1024) { setError("Image is too large. Please use an image under 3 MB."); return; }
     if (preview) URL.revokeObjectURL(preview);
     setFile(next);
     setPreview(URL.createObjectURL(next));
@@ -92,7 +92,7 @@ export default function Home() {
           <p className="muted">For best results, photograph exposed soil in natural daylight. Avoid filters and include a close-up of the soil surface.</p>
           <div className={`dropzone ${preview ? "has-image" : ""}`} onDragOver={e => e.preventDefault()} onDrop={onDrop} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}>
             <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onFileChange} hidden />
-            {preview ? <><img src={preview} alt="Selected soil sample preview" className="preview-image" /><div className="image-overlay"><span>↻ Change image</span></div></> : <div className="upload-placeholder"><div className="upload-icon">↑</div><strong>Drop your soil photo here</strong><span>or <u>browse files</u></span><small>JPG, PNG or WebP · Maximum 8 MB</small></div>}
+            {preview ? <><img src={preview} alt="Selected soil sample preview" className="preview-image" /><div className="image-overlay"><span>↻ Change image</span></div></> : <div className="upload-placeholder"><div className="upload-icon">↑</div><strong>Drop your soil photo here</strong><span>or <u>browse files</u></span><small>JPG, PNG or WebP · Maximum 3 MB</small></div>}
           </div>
           {file && <div className="file-row"><span className="file-icon">▧</span><div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></div><button className="remove" onClick={e => { e.stopPropagation(); if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(""); setAnalysis(null); }} aria-label="Remove image">×</button></div>}
           <div className="section-head region-head"><div><span className="step">02</span><h2>Sample location</h2></div><span className="optional">OPTIONAL</span></div>
