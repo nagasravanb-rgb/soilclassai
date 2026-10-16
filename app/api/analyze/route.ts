@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 function cleanString(value: unknown, fallback = "Not clear from this image"): string {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, 1200) : fallback;
