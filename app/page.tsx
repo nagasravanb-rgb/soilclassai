@@ -50,7 +50,7 @@ export default function Home() {
     setAnalysis(null);
     if (!next) return;
     if (!next.type.startsWith("image/")) { setError("Please select a JPG, PNG, or WebP image."); return; }
-    if (next.size > 8 * 1024 * 1024) { setError("Image is too large. Please use an image under 3 MB."); return; }
+    if (next.size > 3 * 1024 * 1024) { setError("Image is too large. Please use an image under 3 MB."); return; }
     if (preview) URL.revokeObjectURL(preview);
     setFile(next);
     setPreview(URL.createObjectURL(next));
