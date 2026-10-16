@@ -67,17 +67,22 @@ async function runConfiguredClassifier(imageBytes: Buffer, mimeType: string): Pr
       return null;
     }
     const data: unknown = await response.json();
-    const candidates = Array.isArray(data) ? data :
-      (typeof data === "object" && data !== null && Array.isArray((data as Record<string, unknown>).predictions) ? (data as Record<string, unknown>).predictions :
-      (typeof data === "object" && data !== null && Array.isArray((data as Record<string, unknown>).outputs) ? (data as Record<string, unknown>).outputs : []));
-    const first = candidates[0];
-    if (!first || typeof first !== "object") return null;
-    const item = first as Record<string, unknown>;
-    const label = typeof item.label === "string" ? item.label : typeof item.class === "string" ? item.class : null;
-    if (!label) return null;
-    const scoreRaw = item.score ?? item.confidence;
-    const score = typeof scoreRaw === "number" && Number.isFinite(scoreRaw) && scoreRaw >= 0 && scoreRaw <= 1 ? scoreRaw : null;
-    return { label: label.slice(0, 160), score, model: process.env.SOIL_CLASSIFIER_MODEL || "configured endpoint (model not specified)" };
+    const root = data as Record<string, unknown>;
+    const rawCandidates: unknown = Array.isArray(data) ? data :
+      (typeof data === "object" && data !== null && Array.isArray(root.predictions) ? root.predictions :
+      (typeof data === "object" && data !== null && Array.isArray(root.outputs) ? root.outputs : []));
+    const candidates: unknown[] = Array.isArray(rawCandidates) && Array.isArray(rawCandidates[0]) ? rawCandidates[0] as unknown[] : rawCandidates as unknown[];
+    const normalized = candidates.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item))
+      .map(item => {
+        const label = typeof item.label === "string" ? item.label : typeof item.class === "string" ? item.class : null;
+        const rawScore = item.score ?? item.confidence;
+        const score = typeof rawScore === "number" && Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 1 ? rawScore : null;
+        return { label, score };
+      }).filter((item): item is { label: string; score: number | null } => typeof item.label === "string")
+      .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    const best = normalized[0];
+    if (!best) return null;
+    return { label: best.label.slice(0, 160), score: best.score, model: process.env.SOIL_CLASSIFIER_MODEL || "configured endpoint (model not specified)" };
   } catch (error) {
     console.error("Configured soil classifier unavailable", error instanceof Error ? error.message : "unknown error");
     return null;
