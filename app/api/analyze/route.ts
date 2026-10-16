@@ -15,6 +15,75 @@ function cleanList(value: unknown, fallback: string[]): string[] {
   return value.filter((item): item is string => typeof item === "string").slice(0, 8).map(item => item.slice(0, 400));
 }
 
+type Measurements = {
+  moisturePercent?: number;
+  pH?: number;
+  nitrogenMgKg?: number;
+  phosphorusMgKg?: number;
+  potassiumMgKg?: number;
+  ecDsM?: number;
+};
+
+function validateMeasurements(value: unknown): { ok: true; values: Measurements } | { ok: false; error: string } {
+  if (value === undefined || value === null) return { ok: true, values: {} };
+  if (typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "Measurements must be an object." };
+  const input = value as Record<string, unknown>;
+  const limits: Record<keyof Measurements, { min: number; max: number; label: string }> = {
+    moisturePercent: { min: 0, max: 100, label: "Moisture percentage" },
+    pH: { min: 0, max: 14, label: "Soil pH" },
+    nitrogenMgKg: { min: 0, max: 100000, label: "Nitrogen" },
+    phosphorusMgKg: { min: 0, max: 100000, label: "Phosphorus" },
+    potassiumMgKg: { min: 0, max: 100000, label: "Potassium" },
+    ecDsM: { min: 0, max: 1000, label: "Electrical conductivity" }
+  };
+  const values: Measurements = {};
+  for (const key of Object.keys(limits) as (keyof Measurements)[]) {
+    const raw = input[key];
+    if (raw === undefined || raw === null || raw === "") continue;
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < limits[key].min || raw > limits[key].max) {
+      return { ok: false, error: `${limits[key].label} must be a valid number between ${limits[key].min} and ${limits[key].max}.` };
+    }
+    values[key] = raw;
+  }
+  return { ok: true, values };
+}
+
+async function runConfiguredClassifier(imageBytes: Buffer, mimeType: string): Promise<{ label: string; score: number | null; model: string } | null> {
+  const endpoint = process.env.SOIL_CLASSIFIER_ENDPOINT;
+  if (!endpoint) return null;
+  let parsedEndpoint: URL;
+  try { parsedEndpoint = new URL(endpoint); } catch { console.error("SOIL_CLASSIFIER_ENDPOINT is not a valid URL"); return null; }
+  if (parsedEndpoint.protocol !== "https:") { console.error("Soil classifier endpoint must use HTTPS"); return null; }
+
+  try {
+    const headers: Record<string, string> = { "Content-Type": mimeType };
+    if (process.env.SOIL_CLASSIFIER_TOKEN) headers.Authorization = `Bearer ${process.env.SOIL_CLASSIFIER_TOKEN}`;
+    const response = await fetch(parsedEndpoint.toString(), {
+      method: "POST", headers, body: new Uint8Array(imageBytes),
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!response.ok) {
+      console.error("Configured soil classifier returned", response.status, (await response.text()).slice(0, 300));
+      return null;
+    }
+    const data: unknown = await response.json();
+    const candidates = Array.isArray(data) ? data :
+      (typeof data === "object" && data !== null && Array.isArray((data as Record<string, unknown>).predictions) ? (data as Record<string, unknown>).predictions :
+      (typeof data === "object" && data !== null && Array.isArray((data as Record<string, unknown>).outputs) ? (data as Record<string, unknown>).outputs : []));
+    const first = candidates[0];
+    if (!first || typeof first !== "object") return null;
+    const item = first as Record<string, unknown>;
+    const label = typeof item.label === "string" ? item.label : typeof item.class === "string" ? item.class : null;
+    if (!label) return null;
+    const scoreRaw = item.score ?? item.confidence;
+    const score = typeof scoreRaw === "number" && Number.isFinite(scoreRaw) && scoreRaw >= 0 && scoreRaw <= 1 ? scoreRaw : null;
+    return { label: label.slice(0, 160), score, model: process.env.SOIL_CLASSIFIER_MODEL || "configured endpoint (model not specified)" };
+  } catch (error) {
+    console.error("Configured soil classifier unavailable", error instanceof Error ? error.message : "unknown error");
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -26,12 +95,18 @@ export async function POST(request: Request) {
     const imageData = body?.imageData;
     const region = cleanString(body?.region, "India").slice(0, 100);
     const district = typeof body?.district === "string" ? body.district.trim().slice(0, 80) : "";
+    const validatedMeasurements = validateMeasurements(body?.measurements);
+    if (!validatedMeasurements.ok) return NextResponse.json({ error: validatedMeasurements.error }, { status: 400 });
 
     if (typeof imageData !== "string") return NextResponse.json({ error: "Please upload an image first." }, { status: 400 });
     const match = imageData.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
     if (!match || !ALLOWED_TYPES.has(match[1])) return NextResponse.json({ error: "Unsupported image. Use JPG, PNG, or WebP." }, { status: 400 });
     const estimatedBytes = Math.floor(match[2].length * 3 / 4);
-    if (estimatedBytes > MAX_IMAGE_BYTES) return NextResponse.json({ error: "Image exceeds the 8 MB limit." }, { status: 413 });
+    if (estimatedBytes > MAX_IMAGE_BYTES) return NextResponse.json({ error: "Image exceeds the 3 MB limit." }, { status: 413 });
+
+    const [modelClassification] = await Promise.all([
+      runConfiguredClassifier(Buffer.from(match[2], "base64"), match[1])
+    ]);
 
     const prompt = `You are a cautious soil-image observation assistant for India. Analyze only what is reasonably visible in the supplied photograph. User-reported location: ${region}${district ? ", " + district + " district" : ""}. Never claim that a photo can measure laboratory soil chemistry or actual water content.
 
@@ -108,7 +183,13 @@ Rules:
       explanation: cleanString(parsed.explanation),
       regional_context: cleanString(parsed.regional_context, "Regional context is not enough to identify a soil sample.")
     };
-    return NextResponse.json({ analysis });
+    return NextResponse.json({
+      analysis: {
+        ...analysis,
+        measured_properties: validatedMeasurements.values,
+        model_classification: modelClassification
+      }
+    });
   } catch (error) {
     console.error("Soil image analysis failed", error);
     return NextResponse.json({ error: error instanceof Error && error.name === "TimeoutError" ? "Image analysis timed out. Try a smaller image or try again later." : "Unexpected server error while analyzing the image." }, { status: 500 });
