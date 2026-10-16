@@ -40,6 +40,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
@@ -112,7 +113,12 @@ export default function Home() {
       <section className="workspace">
         <div className="panel upload-panel">
           <div className="section-head"><div><span className="step">01</span><h2>Upload soil image</h2></div><span className="required">REQUIRED</span></div>
-          <p className="muted">For best results, photograph exposed soil in natural daylight. Avoid filters and include a close-up of the soil surface.</p>
+          <p className="muted">On your phone, tap <b>Take photo with camera</b> to open the rear camera, photograph exposed soil in natural daylight, then use the captured image for analysis. Avoid filters and include a close-up of the soil surface.</p>
+          <div className="capture-actions">
+            <button type="button" className="camera-button" onClick={() => cameraInputRef.current?.click()}><span aria-hidden="true">▣</span> Take photo with camera</button>
+            <button type="button" className="browse-button" onClick={() => inputRef.current?.click()}>Choose existing photo</button>
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={onFileChange} hidden />
+          </div>
           <div className={`dropzone ${preview ? "has-image" : ""}`} onDragOver={e => e.preventDefault()} onDrop={onDrop} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}>
             <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onFileChange} hidden />
             {preview ? <><img src={preview} alt="Selected soil sample preview" className="preview-image" /><div className="image-overlay"><span>↻ Change image</span></div></> : <div className="upload-placeholder"><div className="upload-icon">↑</div><strong>Drop your soil photo here</strong><span>or <u>browse files</u></span><small>JPG, PNG or WebP · Maximum 3 MB</small></div>}
