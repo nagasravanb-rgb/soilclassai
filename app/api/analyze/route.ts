@@ -109,9 +109,7 @@ export async function POST(request: Request) {
     const estimatedBytes = Math.floor(match[2].length * 3 / 4);
     if (estimatedBytes > MAX_IMAGE_BYTES) return NextResponse.json({ error: "Image exceeds the 3 MB limit." }, { status: 413 });
 
-    const [modelClassification] = await Promise.all([
-      runConfiguredClassifier(Buffer.from(match[2], "base64"), match[1])
-    ]);
+    const modelClassificationPromise = runConfiguredClassifier(Buffer.from(match[2], "base64"), match[1]);
 
     const prompt = `You are a cautious soil-image observation assistant for India. Analyze only what is reasonably visible in the supplied photograph. User-reported location: ${region}${district ? ", " + district + " district" : ""}. Never claim that a photo can measure laboratory soil chemistry or actual water content.
 
@@ -188,6 +186,7 @@ Rules:
       explanation: cleanString(parsed.explanation),
       regional_context: cleanString(parsed.regional_context, "Regional context is not enough to identify a soil sample.")
     };
+    const modelClassification = await modelClassificationPromise;
     return NextResponse.json({
       analysis: {
         ...analysis,
