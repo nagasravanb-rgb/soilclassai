@@ -25,8 +25,6 @@ type Analysis = {
   model_classification?: { label: string; score: number | null; model: string } | null;
 };
 
-const initialAnalysis: Analysis | null = null;
-
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -40,7 +38,7 @@ export default function Home() {
   const [ec, setEc] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [analysis, setAnalysis] = useState<Analysis | null>(initialAnalysis);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -49,7 +47,7 @@ export default function Home() {
     setError("");
     setAnalysis(null);
     if (!next) return;
-    if (!next.type.startsWith("image/")) { setError("Please select a JPG, PNG, or WebP image."); return; }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(next.type)) { setError("Please select a JPG, PNG, or WebP image."); return; }
     if (next.size > 3 * 1024 * 1024) { setError("Image is too large. Please use an image under 3 MB."); return; }
     if (preview) URL.revokeObjectURL(preview);
     setFile(next);
@@ -89,7 +87,7 @@ export default function Home() {
           },
         }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Analysis failed. Please try again.");
       setAnalysis(data.analysis as Analysis);
     } catch (e) {
@@ -122,7 +120,7 @@ export default function Home() {
           {file && <div className="file-row"><span className="file-icon">▧</span><div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></div><button className="remove" onClick={e => { e.stopPropagation(); if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(""); setAnalysis(null); }} aria-label="Remove image">×</button></div>}
           <div className="section-head region-head"><div><span className="step">02</span><h2>Sample location</h2></div><span className="optional">OPTIONAL</span></div>
           <div className="field-grid">
-            <label>State / region<select value={region} onChange={e => setRegion(e.target.value)}><option>Andhra Pradesh</option><option>Telangana</option><option>Tamil Nadu</option><option>Karnataka</option><option>Kerala</option><option>Maharashtra</option><option>Odisha</option><option>Other Indian state</option><option>Outside India</option></select></label>
+            <label>State / region<select value={region} onChange={e => setRegion(e.target.value)}><option>Andhra Pradesh</option><option>Arunachal Pradesh</option><option>Assam</option><option>Bihar</option><option>Chhattisgarh</option><option>Goa</option><option>Gujarat</option><option>Haryana</option><option>Himachal Pradesh</option><option>Jharkhand</option><option>Karnataka</option><option>Kerala</option><option>Madhya Pradesh</option><option>Maharashtra</option><option>Manipur</option><option>Meghalaya</option><option>Mizoram</option><option>Nagaland</option><option>Odisha</option><option>Punjab</option><option>Rajasthan</option><option>Sikkim</option><option>Tamil Nadu</option><option>Telangana</option><option>Tripura</option><option>Uttar Pradesh</option><option>Uttarakhand</option><option>West Bengal</option><option>Andaman and Nicobar Islands</option><option>Chandigarh</option><option>Dadra and Nagar Haveli and Daman and Diu</option><option>Delhi</option><option>Jammu and Kashmir</option><option>Ladakh</option><option>Lakshadweep</option><option>Puducherry</option><option>Outside India</option></select></label>
             <label>District (if known)<input value={district} onChange={e => setDistrict(e.target.value)} placeholder="e.g. Kadapa" maxLength={80} /></label>
           </div>
           <div className="section-head region-head"><div><span className="step">03</span><h2>Optional measured properties</h2></div><span className="optional">IF KNOWN</span></div>
