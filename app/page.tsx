@@ -14,6 +14,15 @@ type Analysis = {
   confidence: string;
   explanation: string;
   regional_context: string;
+  measured_properties?: {
+    moisturePercent?: number;
+    pH?: number;
+    nitrogenMgKg?: number;
+    phosphorusMgKg?: number;
+    potassiumMgKg?: number;
+    ecDsM?: number;
+  };
+  model_classification?: { label: string; score: number | null; model: string } | null;
 };
 
 const initialAnalysis: Analysis | null = null;
@@ -23,6 +32,12 @@ export default function Home() {
   const [preview, setPreview] = useState("");
   const [region, setRegion] = useState("Andhra Pradesh");
   const [district, setDistrict] = useState("");
+  const [moisturePercent, setMoisturePercent] = useState("");
+  const [soilPH, setSoilPH] = useState("");
+  const [nitrogen, setNitrogen] = useState("");
+  const [phosphorus, setPhosphorus] = useState("");
+  const [potassium, setPotassium] = useState("");
+  const [ec, setEc] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(initialAnalysis);
@@ -62,7 +77,17 @@ export default function Home() {
       });
       const response = await fetch("/api/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData, region, district }),
+        body: JSON.stringify({
+          imageData, region, district,
+          measurements: {
+            moisturePercent: moisturePercent === "" ? undefined : Number(moisturePercent),
+            pH: soilPH === "" ? undefined : Number(soilPH),
+            nitrogenMgKg: nitrogen === "" ? undefined : Number(nitrogen),
+            phosphorusMgKg: phosphorus === "" ? undefined : Number(phosphorus),
+            potassiumMgKg: potassium === "" ? undefined : Number(potassium),
+            ecDsM: ec === "" ? undefined : Number(ec),
+          },
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Analysis failed. Please try again.");
@@ -100,21 +125,40 @@ export default function Home() {
             <label>State / region<select value={region} onChange={e => setRegion(e.target.value)}><option>Andhra Pradesh</option><option>Telangana</option><option>Tamil Nadu</option><option>Karnataka</option><option>Kerala</option><option>Maharashtra</option><option>Odisha</option><option>Other Indian state</option><option>Outside India</option></select></label>
             <label>District (if known)<input value={district} onChange={e => setDistrict(e.target.value)} placeholder="e.g. Kadapa" maxLength={80} /></label>
           </div>
+          <div className="section-head region-head"><div><span className="step">03</span><h2>Optional measured properties</h2></div><span className="optional">IF KNOWN</span></div>
+          <p className="muted">Enter readings from a soil test report or calibrated sensor. Leave unknown values blank; these are kept separate from image estimates.</p>
+          <div className="field-grid measurement-grid">
+            <label>Moisture (% VWC)<input type="number" min="0" max="100" step="0.1" value={moisturePercent} onChange={e => setMoisturePercent(e.target.value)} placeholder="e.g. 24.5" /></label>
+            <label>Soil pH (0–14)<input type="number" min="0" max="14" step="0.1" value={soilPH} onChange={e => setSoilPH(e.target.value)} placeholder="e.g. 6.8" /></label>
+            <label>Nitrogen (mg/kg)<input type="number" min="0" max="100000" step="any" value={nitrogen} onChange={e => setNitrogen(e.target.value)} placeholder="From soil test" /></label>
+            <label>Phosphorus (mg/kg)<input type="number" min="0" max="100000" step="any" value={phosphorus} onChange={e => setPhosphorus(e.target.value)} placeholder="From soil test" /></label>
+            <label>Potassium (mg/kg)<input type="number" min="0" max="100000" step="any" value={potassium} onChange={e => setPotassium(e.target.value)} placeholder="From soil test" /></label>
+            <label>EC (dS/m)<input type="number" min="0" max="1000" step="any" value={ec} onChange={e => setEc(e.target.value)} placeholder="From soil test" /></label>
+          </div>
           <button className="analyze-button" onClick={analyze} disabled={!file || loading}>{loading ? <><span className="spinner" /> Examining image…</> : <>Analyze soil image <span>→</span></>}</button>
           <p className="privacy-note">Your image is sent securely to the configured AI vision provider for analysis. Do not upload personal or sensitive photos.</p>
           {error && <div className="error-box" role="alert"><b>Could not analyze image</b><p>{error}</p>{error.toLowerCase().includes("api key") && <p>Set <code>GEMINI_API_KEY</code> in your Vercel project environment variables, then redeploy.</p>}</div>}
         </div>
 
         <div className="panel results-panel">
-          <div className="section-head"><div><span className="step">03</span><h2>Soil insights</h2></div><span className={`status ${analysis ? "status-done" : ""}`}>{analysis ? "ANALYSIS READY" : "AWAITING IMAGE"}</span></div>
+          <div className="section-head"><div><span className="step">04</span><h2>Soil insights</h2></div><span className={`status ${analysis ? "status-done" : ""}`}>{analysis ? "ANALYSIS READY" : "AWAITING IMAGE"}</span></div>
           {!analysis ? <div className="empty-state"><div className="soil-art"><div className="sun" /><div className="soil-layer layer-one" /><div className="soil-layer layer-two" /><div className="soil-layer layer-three" /><span className="sprout">♧</span></div><h3>Your soil story starts here</h3><p>Upload a soil photo and run the analysis to see visible characteristics and regional context here.</p><div className="empty-checks"><span>○ Soil type & texture</span><span>○ Apparent surface moisture</span><span>○ Visible properties & limitations</span></div></div> : <div className="results-content">
-            <div className="classification-card"><span className="mini-label">LIKELY VISUAL CLASS</span><h3>{analysis.soil_type}</h3><p>{analysis.explanation}</p><div className="confidence"><span>Visual confidence</span><b>{analysis.confidence}</b></div><small>AI visual estimate — not a laboratory result.</small></div>
+            {analysis.model_classification && <div className="classification-card model-card"><span className="mini-label">CONFIGURED IMAGE CLASSIFIER</span><h3>{analysis.model_classification.label}</h3><p>Model: {analysis.model_classification.model}</p><div className="confidence"><span>Model score (not field-calibrated)</span><b>{analysis.model_classification.score === null ? "Not supplied" : `${(analysis.model_classification.score * 100).toFixed(1)}%`}</b></div><small>Model output is not proof of accuracy for your local soil. Validate against labelled Andhra Pradesh samples.</small></div>}
+            <div className="classification-card"><span className="mini-label">AI VISUAL ESTIMATE · NOT A VALIDATED CLASSIFIER</span><h3>{analysis.soil_type}</h3><p>{analysis.explanation}</p><div className="confidence"><span>Visual confidence</span><b>{analysis.confidence}</b></div><small>AI visual estimate — not a laboratory result.</small></div>
             <div className="metric-grid">
               <div className="metric"><span className="metric-symbol">◈</span><small>TEXTURE</small><b>{analysis.texture}</b></div>
               <div className="metric"><span className="metric-symbol">◉</span><small>COLOR</small><b>{analysis.color}</b></div>
               <div className="metric"><span className="metric-symbol">◌</span><small>APPARENT MOISTURE</small><b>{analysis.moisture_visual}</b></div>
               <div className="metric"><span className="metric-symbol">⌁</span><small>VISIBLE DRAINAGE CLUES</small><b>{analysis.drainage_visual}</b></div>
             </div>
+            {analysis.measured_properties && Object.values(analysis.measured_properties).some(v => typeof v === "number") && <div className="detail-block measured-results"><h4>Provided sensor / laboratory readings</h4><p>These are the values entered with this request; they were not measured by the photo-analysis model.</p><div className="measurement-results">
+              {typeof analysis.measured_properties.moisturePercent === "number" && <span><b>{analysis.measured_properties.moisturePercent}%</b><small>Moisture (entered)</small></span>}
+              {typeof analysis.measured_properties.pH === "number" && <span><b>pH {analysis.measured_properties.pH}</b><small>Soil pH (entered)</small></span>}
+              {typeof analysis.measured_properties.nitrogenMgKg === "number" && <span><b>{analysis.measured_properties.nitrogenMgKg} mg/kg</b><small>Nitrogen (entered)</small></span>}
+              {typeof analysis.measured_properties.phosphorusMgKg === "number" && <span><b>{analysis.measured_properties.phosphorusMgKg} mg/kg</b><small>Phosphorus (entered)</small></span>}
+              {typeof analysis.measured_properties.potassiumMgKg === "number" && <span><b>{analysis.measured_properties.potassiumMgKg} mg/kg</b><small>Potassium (entered)</small></span>}
+              {typeof analysis.measured_properties.ecDsM === "number" && <span><b>{analysis.measured_properties.ecDsM} dS/m</b><small>EC (entered)</small></span>}
+            </div></div>}
             <div className="detail-block"><h4>Visible properties</h4><ul>{analysis.visible_properties?.map((x,i) => <li key={i}>{x}</li>)}</ul></div>
             <div className="detail-block"><h4>Organic matter clues</h4><p>{analysis.organic_matter_visual}</p></div>
             <div className="detail-block regional"><h4>Regional context</h4><p>{analysis.regional_context}</p></div>
